@@ -98,8 +98,9 @@ const LoginScreen = () => {
 
     try {
       const response = await executeLogin({
-        email: formState.username.value,
+        username: formState.username.value,
         password: formState.password.value,
+        roleId: parseInt(formState.role.value),
       });
       setAuthData(response);
       toast.success('¡Bienvenido!', 'Inicio de sesión exitoso');
@@ -166,8 +167,8 @@ const LoginScreen = () => {
               label="Selecciona tu rol"
               placeholder="Selecciona una opción"
               options={[
-                { label: 'Cliente', value: 'cliente' },
-                { label: 'Conductor', value: 'conductor' },
+                { label: 'Cliente', value: '4' },
+                { label: 'Conductor', value: '3' },
               ]}
               value={formState.role.value}
               onValueChange={(value) => updateField('role', value)}
