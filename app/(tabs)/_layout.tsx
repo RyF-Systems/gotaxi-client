@@ -1,7 +1,21 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { Tabs } from 'expo-router';
+import { useEffect } from 'react';
 
 export default function TabsLayout() {
+  const checkLocationPermission = async () => {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      console.log('Permission to access location was denied');
+      return;
+    }
+  };
+
+  useEffect(() => {
+    checkLocationPermission();
+  }, []);
+
   return (
     <Tabs
       screenOptions={{
@@ -27,7 +41,7 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="bookings"
+        name="booking"
         options={{
           title: 'Viajes',
           tabBarIcon: ({ color, size }) => (

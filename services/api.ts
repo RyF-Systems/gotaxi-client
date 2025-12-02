@@ -17,13 +17,13 @@ export const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     const token = useAuthStore.getState().token;
-    
+
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    
-    console.log('🚀 Request:', config.method?.toUpperCase(), config.url);
-    
+
+    console.log('🚀 Request:', config);
+
     return config;
   },
   (error) => {
@@ -40,11 +40,11 @@ api.interceptors.response.use(
   },
   async (error) => {
     const originalRequest = error.config;
-    
+
     // Manejo de token expirado (401)
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
-      
+
       try {
         const newToken = await refreshToken();
         useAuthStore.getState().updateToken(newToken);
@@ -56,12 +56,12 @@ api.interceptors.response.use(
         return Promise.reject(refreshError);
       }
     }
-    
+
     // 🔍 Logging detallado según el tipo de error
     if (error.response) {
       // El servidor respondió con un código de error
       const { status, data } = error.response;
-      
+
       console.log('❌ API Error:', {
         url: error.config?.url,
         method: error.config?.method?.toUpperCase(),
@@ -69,7 +69,7 @@ api.interceptors.response.use(
         message: data?.message || 'Error desconocido',
         errors: data?.errors || null, // Errores de validación
       });
-      
+
       // Logging específico por tipo de error
       switch (status) {
         case 400:
@@ -93,7 +93,7 @@ api.interceptors.response.use(
     } else {
       console.log('⚙️ Request Setup Error:', error.message);
     }
-    
+
     return Promise.reject(error);
   }
 );

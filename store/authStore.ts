@@ -21,12 +21,14 @@ interface AuthState {
   token: string | null;
   refreshToken: string | null;
   isAuthenticated: boolean;
+  _hasHydrated: boolean;
 
   // Acciones SOLO para setear estado (sin lógica de API)
   setAuthData: (data: AuthResponse) => void;
   updateUser: (user: Partial<User>) => void;
   updateToken: (token: string) => void;
   logout: () => void;
+  setHasHydrated: (state: boolean) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -37,6 +39,7 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       refreshToken: null,
       isAuthenticated: false,
+      _hasHydrated: false,
 
       // Setear datos de autenticación (después de login/register exitoso)
       setAuthData: (data) =>
@@ -64,6 +67,9 @@ export const useAuthStore = create<AuthState>()(
           refreshToken: null,
           isAuthenticated: false,
         }),
+
+      // Marcar como hidratado
+      setHasHydrated: (state) => set({ _hasHydrated: state }),
     }),
     {
       name: 'auth-storage',
@@ -75,6 +81,10 @@ export const useAuthStore = create<AuthState>()(
         refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
       }),
+      // Callback cuando termina de cargar desde AsyncStorage
+      onRehydrateStorage: () => (state) => {
+        state?.setHasHydrated(true);
+      },
     }
   )
 );

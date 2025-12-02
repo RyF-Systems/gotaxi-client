@@ -21,18 +21,19 @@ export default function RootLayout() {
   });
 
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const hasHydrated = useAuthStore((state) => state._hasHydrated);
 
-  // Ocultar splash screen cuando las fuentes estén listas
+  // Ocultar splash screen cuando las fuentes estén listas Y se haya hidratado el store
   useEffect(() => {
-    if (fontsLoaded) {
+    if (fontsLoaded && hasHydrated) {
       SplashScreen.hideAsync();
       setIsNavigationReady(true);
     }
-  }, [fontsLoaded]);
+  }, [fontsLoaded, hasHydrated]);
 
   // Protección de rutas
   useEffect(() => {
-    if (!isNavigationReady) return;
+    if (!isNavigationReady || !hasHydrated) return;
 
     const inAuthGroup = (segments[0] as string) === '(auth)';
 
@@ -43,7 +44,7 @@ export default function RootLayout() {
       // Usuario autenticado en páginas de auth
       router.replace('(tabs)/');
     }
-  }, [isAuthenticated, segments, isNavigationReady, router]);
+  }, [isAuthenticated, segments, isNavigationReady, hasHydrated, router]);
 
   if (!fontsLoaded || !isNavigationReady) {
     return null;
@@ -59,8 +60,8 @@ export default function RootLayout() {
       >
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
-        <Stack.Screen 
-          name="booking" 
+        <Stack.Screen
+          name="booking"
           options={{
             presentation: 'modal',
           }}

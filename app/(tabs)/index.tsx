@@ -2,88 +2,96 @@ import { Text } from '@/components/common/Text';
 import { useAuthStore } from '@/store/authStore';
 import { colors, spacing } from '@/theme';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import React from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function HomeScreen() {
   const user = useAuthStore((state) => state.user);
   const router = useRouter();
 
   return (
-    <View style={styles.container}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text variant="caption" color={colors.text.secondary}>
-              Bienvenido de nuevo
-            </Text>
-            <Text variant="h2" weight="bold">
-              {user?.name || 'Usuario'}
-            </Text>
-          </View>
-          <View style={styles.iconContainer}>
-            <Ionicons name="person-circle" size={48} color={colors.primary.main} />
-          </View>
-        </View>
-
-        {/* Quick Actions */}
-        <View style={styles.section}>
-          <Text variant="h3" weight="semiBold" style={styles.sectionTitle}>
-            Acciones rápidas
-          </Text>
-          <View style={styles.quickActions}>
-            <View style={styles.actionCard}>
-              <View style={styles.actionIcon}>
-                <Ionicons name="car" size={32} color={colors.blue.main} />
-              </View>
-              <Text weight="semiBold" style={styles.actionTitle}>
-                Solicitar viaje
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Header */}
+          <View style={styles.header}>
+            <View>
+              <Text variant="caption" color={colors.text.secondary}>
+                Bienvenido de nuevo
               </Text>
-              <Text variant="caption" color={colors.text.secondary} style={styles.actionDescription}>
-                Encuentra un conductor cerca
+              <Text variant="h2" weight="bold">
+                {user?.name || 'Usuario'}
               </Text>
             </View>
+            <View style={styles.iconContainer}>
+              <Ionicons name="person-circle" size={48} color={colors.primary.main} />
+            </View>
+          </View>
 
-            <View style={styles.actionCard}>
-              <View style={styles.actionIcon}>
-                <Ionicons name="time" size={32} color={colors.success} />
+          {/* Quick Actions */}
+          <View style={styles.section}>
+            <Text variant="h3" weight="semiBold" style={styles.sectionTitle}>
+              Acciones rápidas
+            </Text>
+            <View style={styles.quickActions}>
+              <Link href="/booking/new" asChild>
+                <Pressable style={({ pressed }) => [styles.actionCard, pressed && styles.actionCardPressed]}>
+                  <View style={styles.actionIcon}>
+                    <Ionicons name="car" size={32} color={colors.blue.main} />
+                  </View>
+                  <Text weight="semiBold" style={styles.actionTitle}>
+                    Solicitar viaje
+                  </Text>
+                  <Text variant="caption" color={colors.text.secondary} style={styles.actionDescription}>
+                    Encuentra un conductor cerca
+                  </Text>
+                </Pressable>
+              </Link>
+
+              <View style={styles.actionCard}>
+                <View style={styles.actionIcon}>
+                  <Ionicons name="time" size={32} color={colors.success} />
+                </View>
+                <Text weight="semiBold" style={styles.actionTitle}>
+                  Mis viajes
+                </Text>
+                <Text variant="caption" color={colors.text.secondary} style={styles.actionDescription}>
+                  Historial de viajes
+                </Text>
               </View>
-              <Text weight="semiBold" style={styles.actionTitle}>
-                Mis viajes
-              </Text>
-              <Text variant="caption" color={colors.text.secondary} style={styles.actionDescription}>
-                Historial de viajes
+            </View>
+          </View>
+
+          {/* Recent Activity */}
+          <View style={styles.section}>
+            <Text variant="h3" weight="semiBold" style={styles.sectionTitle}>
+              Actividad reciente
+            </Text>
+            <View style={styles.emptyState}>
+              <Ionicons name="document-text-outline" size={64} color={colors.text.disabled} />
+              <Text color={colors.text.secondary} style={styles.emptyText}>
+                No hay viajes recientes
               </Text>
             </View>
           </View>
-        </View>
-
-        {/* Recent Activity */}
-        <View style={styles.section}>
-          <Text variant="h3" weight="semiBold" style={styles.sectionTitle}>
-            Actividad reciente
-          </Text>
-          <View style={styles.emptyState}>
-            <Ionicons name="document-text-outline" size={64} color={colors.text.disabled} />
-            <Text color={colors.text.secondary} style={styles.emptyText}>
-              No hay viajes recientes
-            </Text>
-          </View>
-        </View>
-      </ScrollView>
-    </View>
+        </ScrollView>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
     backgroundColor: colors.background.default,
+  },
+  container: {
+    flex: 1,
   },
   content: {
     padding: spacing.lg,
@@ -119,6 +127,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  actionCardPressed: {
+    backgroundColor: colors.background.paperPressed,
   },
   actionIcon: {
     width: 56,
