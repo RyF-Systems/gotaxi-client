@@ -1,49 +1,20 @@
 import { Button } from '@/components/common/Button';
+import { InputState } from '@/components/common/InputAutocomplete';
 import { LocationInput, LocationOption } from '@/components/common/LocationInput';
 import { MapRoute } from '@/components/common/MapRoute';
 import { Text } from '@/components/common/Text';
 import { TripInfoCard } from '@/components/common/TripInfoCard';
 import { useToast } from '@/hooks/toastContext';
+import { useLocationSearch } from '@/hooks/useLocationSearch';
 import { useBookingStore } from '@/store';
 import { colors, spacing, typography } from '@/theme';
+import { GOOGLE_MAPS_CONFIG } from '@/utils/config';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
-// Mock data para testing (fuera del componente)
-const MOCK_LOCATIONS: LocationOption[] = [
-	{
-		address: 'Centro Comercial Sambil',
-		latitude: 10.7161971,
-		longitude: -71.6445307,
-		description: 'Maracaibo, Zulia',
-		placeId: 'mock-1',
-	},
-	{
-		address: 'Parque Ana Maria Campos',
-		latitude: 10.671897,
-		longitude: -71.6440949,
-		description: 'Maracaibo, Zulia',
-		placeId: 'mock-2',
-	},
-	{
-		address: 'Aeropuerto Internacional La Chinita',
-		latitude: 10.5566819,
-		longitude: -71.7254096,
-		description: 'Maracaibo, Venezuela',
-		placeId: 'mock-4',
-	},
-	{
-		address: 'Plaza de la Republica',
-		latitude: 10.665835,
-		longitude: -71.6086227,
-		description: 'Maracaibo, Zulia',
-		placeId: 'mock-5',
-	},
-];
 
 const NewBookingScreen: React.FC = () => {
 	const toast = useToast();
@@ -57,35 +28,30 @@ const NewBookingScreen: React.FC = () => {
 		removeDropoffLocation,
 	} = useBookingStore();
 
-	// Estados para búsqueda manual
-	const [originQuery, setOriginQuery] = useState(pickupLocation?.address || '');
-	const [destinationQuery, setDestinationQuery] = useState(dropoffLocation?.address || '');
-	const [originResults, setOriginResults] = useState<LocationOption[]>([]);
-	const [destinationResults, setDestinationResults] = useState<LocationOption[]>([]);
-	const [originLoading, setOriginLoading] = useState(false);
-	const [destinationLoading, setDestinationLoading] = useState(false);
-	const [selectMapTextColor, setSelectMapTextColor] = useState(colors.text.secondary);
+	const origin = useLocationSearch(GOOGLE_MAPS_CONFIG);
+	const destination = useLocationSearch(GOOGLE_MAPS_CONFIG);
+	const [selectMapTextColor, setSelectMapTextColor] = useState(colors.tertiary.main);
+	const [inputFocused, setInputFocused] = useState<'origin' | 'destination'>('destination');
 	const [, setHasLocationPermission] = useState(false);
-	const [firstLoad, setFirstLoad] = useState(true);
-
-	// Estados derivados del store y loading
-	const originState = originLoading ? 'loading' : pickupLocation ? 'valid' : 'default';
-	const destinationState = destinationLoading ? 'loading' : dropoffLocation ? 'valid' : 'default';
-
-	// Sincronizar queries cuando cambie el store
-	useEffect(() => {
-		if (pickupLocation && originQuery !== pickupLocation.address) {
-			setOriginQuery(pickupLocation.address);
-		}
-	}, [originQuery, pickupLocation]);
+	const [originState, setOriginState] = useState<InputState>(
+		origin.loading ? 'loading' : pickupLocation ? 'valid' : 'default',
+	);
+	const [destinationState, setDestinationState] = useState<InputState>(
+		destination.loading ? 'loading' : dropoffLocation ? 'valid' : 'default',
+	);
 
 	useEffect(() => {
-		if (dropoffLocation && destinationQuery !== dropoffLocation.address) {
-			setDestinationQuery(dropoffLocation.address);
+		if (pickupLocation && origin.query !== pickupLocation.address) {
+			origin.setQuery(pickupLocation.address);
 		}
-	}, [destinationQuery, dropoffLocation]);
+	}, [origin, pickupLocation]);
 
-	// Obtener ubicación actual del usuario
+	useEffect(() => {
+		if (dropoffLocation && destination.query !== dropoffLocation.address) {
+			destination.setQuery(dropoffLocation.address);
+		}
+	}, [destination, dropoffLocation]);
+
 	const getCurrentLocation = useCallback(async (): Promise<LocationOption | null> => {
 		try {
 			const { status } = await Location.requestForegroundPermissionsAsync();
@@ -119,61 +85,32 @@ const NewBookingScreen: React.FC = () => {
 			const currentLocation = await getCurrentLocation();
 			if (currentLocation) {
 				setPickupLocation(currentLocation);
+				setOriginState('valid');
 			}
 		};
 
 		initializeLocation();
-	// eslint-disable-next-line react-hooks/exhaustive-deps
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
-	// Handler genérico para búsqueda de ubicaciones
-	const handleLocationSearch = useCallback(
-		(
-			text: string,
-			setQuery: (text: string) => void,
-			setResults: (results: LocationOption[]) => void,
-			setLoading: (loading: boolean) => void,
-			clearLocation: () => void,
-		) => {
-			setQuery(text);
-			clearLocation();
-
-			if (text.length === 0) {
-				setResults([]);
-				return;
-			}
-
-			setLoading(true);
-
-			// Simular búsqueda con delay
-			setTimeout(() => {
-				const filtered = MOCK_LOCATIONS.filter(
-					location =>
-						location.address.toLowerCase().includes(text.toLowerCase()) ||
-						location.description?.toLowerCase().includes(text.toLowerCase()),
-				);
-				setResults(filtered);
-				setLoading(false);
-			}, 500);
-		},
-		[],
-	);
-
 	const handleOriginClear = useCallback(() => {
-		setOriginQuery('');
+		origin.setQuery('');
 		removePickupLocation();
-	}, [removePickupLocation]);
+	}, [origin, removePickupLocation]);
 
 	const handleDestinationClear = useCallback(() => {
-		setDestinationQuery('');
+		destination.setQuery('');
 		removeDropoffLocation();
-	}, [removeDropoffLocation]);
+	}, [destination, removeDropoffLocation]);
 
 	const handleOriginChange = useCallback(
 		(text: string) => {
-			handleLocationSearch(text, setOriginQuery, setOriginResults, setOriginLoading, removePickupLocation);
+			origin.setQuery(text);
+			if (text.length === 0) {
+				removePickupLocation();
+			}
 		},
-		[handleLocationSearch, removePickupLocation],
+		[origin, removePickupLocation],
 	);
 
 	const handleOriginMap = useCallback(() => {
@@ -206,39 +143,58 @@ const NewBookingScreen: React.FC = () => {
 
 	const onOriginFocused = useCallback(() => {
 		setSelectMapTextColor(colors.primary.main);
+		setInputFocused('origin');
+		setOriginState('default');
 	}, []);
+
+	const onOriginBlur = useCallback(() => {
+		if (pickupLocation) {
+			setOriginState('valid');
+		} else {
+			setOriginState('invalid');
+		}
+	}, [pickupLocation]);
 
 	const onDestinationFocused = useCallback(() => {
 		setSelectMapTextColor(colors.tertiary.main);
+		setInputFocused('destination');
+		setDestinationState('default');
 	}, []);
+
+	const onDestinationBlur = useCallback(() => {
+		if (dropoffLocation) {
+			setDestinationState('valid');
+		} else {
+			setDestinationState('invalid');
+		}
+	}, [dropoffLocation]);
 
 	const handleDestinationChange = useCallback(
 		(text: string) => {
-			handleLocationSearch(
-				text,
-				setDestinationQuery,
-				setDestinationResults,
-				setDestinationLoading,
-				removeDropoffLocation,
-			);
+			destination.setQuery(text);
+			if (text.length === 0) {
+				removeDropoffLocation();
+			}
 		},
-		[handleLocationSearch, removeDropoffLocation],
+		[destination, removeDropoffLocation],
 	);
 
 	const handleOriginSelected = useCallback(
 		(option: LocationOption) => {
-			setOriginResults([]);
 			setPickupLocation(option);
+			origin.setQuery(option.address);
+			setOriginState('valid');
 		},
-		[setPickupLocation],
+		[setPickupLocation, origin],
 	);
 
 	const handleDestinationSelected = useCallback(
 		(option: LocationOption) => {
-			setDestinationResults([]);
 			setDropoffLocation(option);
+			destination.setQuery(option.address);
+			setDestinationState('valid');
 		},
-		[setDropoffLocation],
+		[setDropoffLocation, destination],
 	);
 
 	const handleDestinationMap = useCallback(() => {
@@ -254,53 +210,37 @@ const NewBookingScreen: React.FC = () => {
 				<View style={styles.locationsContainer}>
 					<LocationInput
 						placeholder="¿Dónde estás?"
-						value={originQuery}
+						value={origin.query}
 						onChangeText={handleOriginChange}
 						iconName="location"
 						mapIconColor={colors.primary.main}
 						onMapPress={handleOriginMap}
 						onClearPress={handleOriginClear}
-						options={originResults}
+						options={origin.results}
 						onOptionSelected={handleOriginSelected}
 						state={originState}
 						containerStyle={styles.locationInput}
 						onFocus={onOriginFocused}
+						onBlur={onOriginBlur}
+						focusedLeftIconColor={colors.primary.main}
+						focusedBorderColor={colors.primary.main}
 						hasValidLocation={!!pickupLocation}
 					/>
 
-					{/* Google Places Autocomplete - Para comparar */}
-					{/* <GooglePlacesInput
-						placeholder="¿Dónde estás? (Google Places)"
-						iconName="location"
-						mapIconName="map"
-						mapIconColor={colors.primary.main}
-						onLocationSelected={(location) => {
-							setPickupLocation(location);
-							toast.success('Origen seleccionado', location.address);
-						}}
-						onMapPress={handleOriginMap}
-						onClearPress={handleOriginClear}
-						containerStyle={styles.googlePlacesInput}
-						locationBias={{
-							latitude: 10.647818, // Maracaibo
-							longitude: -71.612268,
-							radius: 30000, // 30km alrededor de Maracaibo
-						}}
-					/> */}
-
 					<LocationInput
 						placeholder="¿A dónde vas?"
-						value={destinationQuery}
+						value={destination.query}
 						onChangeText={handleDestinationChange}
 						iconName="location-sharp"
 						mapIconColor={colors.tertiary.main}
 						onMapPress={handleDestinationMap}
 						onClearPress={handleDestinationClear}
-						options={destinationResults}
+						options={destination.results}
 						onOptionSelected={handleDestinationSelected}
 						state={destinationState}
 						containerStyle={styles.locationInput}
 						onFocus={onDestinationFocused}
+						onBlur={onDestinationBlur}
 						focusedLeftIconColor={colors.tertiary.main}
 						focusedBorderColor={colors.tertiary.main}
 						hasValidLocation={!!dropoffLocation}
@@ -308,7 +248,7 @@ const NewBookingScreen: React.FC = () => {
 
 					<TouchableOpacity
 						style={styles.mapHintContainer}
-						onPress={() => toast.info('Mapa', 'Arrastra los marcadores para ajustar')}
+						onPress={() => router.push(`/location/selectLocation?type=${inputFocused}`)}
 					>
 						<Ionicons name="map" size={20} color={selectMapTextColor} />
 						<Text style={[styles.mapHintText, { color: selectMapTextColor }]}>Seleccionar la ubicación en el mapa</Text>
