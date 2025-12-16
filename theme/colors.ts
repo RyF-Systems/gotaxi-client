@@ -11,6 +11,12 @@ export const colors = {
     dark: '#CCB000',
     foreground: '#64748b', // hsl(215.4, 16.3%, 46.9%)
   },
+  tertiary: {
+    main: '#1c03c1ff', // gris azulado oscuro
+    light: '#334155',
+    dark: '#0F172A',
+    foreground: '#FFFFFF',
+  },
   background: {
     default: '#F8FAFC',
     paper: '#F5F5F5',

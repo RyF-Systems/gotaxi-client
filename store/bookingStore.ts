@@ -17,6 +17,8 @@ interface BookingState {
   // Acciones
   setPickupLocation: (location: Location) => void;
   setDropoffLocation: (location: Location) => void;
+  removePickupLocation: () => void;
+  removeDropoffLocation: () => void;
   searchNearbyDrivers: (location: Location) => Promise<void>;
   calculateEstimate: (pickup: Location, dropoff: Location) => Promise<void>;
   createBooking: (bookingData: BookingRequest) => Promise<void>;
@@ -42,6 +44,8 @@ export const useBookingStore = create<BookingState>((set, get) => ({
   // Establecer ubicación de recogida
   setPickupLocation: (location) => {
     set({ pickupLocation: location });
+
+    console.log('location', location);
     
     // Auto-buscar conductores cercanos
     const { dropoffLocation } = get();
@@ -59,6 +63,25 @@ export const useBookingStore = create<BookingState>((set, get) => ({
     if (pickupLocation) {
       get().calculateEstimate(pickupLocation, location);
     }
+  },
+
+  // Eliminar ubicación de recogida
+  removePickupLocation: () => {
+    set({ 
+      pickupLocation: null,
+      estimatedPrice: 0,
+      estimatedDistance: 0,
+      nearbyDrivers: [],
+    });
+  },
+
+  // Eliminar destino
+  removeDropoffLocation: () => {
+    set({ 
+      dropoffLocation: null,
+      estimatedPrice: 0,
+      estimatedDistance: 0,
+    });
   },
 
   // Buscar conductores cercanos
