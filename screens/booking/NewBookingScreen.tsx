@@ -1,408 +1,484 @@
 import { Button } from '@/components/common/Button';
-import { LocationInput } from '@/components/common/LocationInput';
+import { LocationInput, LocationOption } from '@/components/common/LocationInput';
+import { MapRoute } from '@/components/common/MapRoute';
 import { Text } from '@/components/common/Text';
+import { TripInfoCard } from '@/components/common/TripInfoCard';
 import { useToast } from '@/hooks/toastContext';
+import { useBookingStore } from '@/store';
 import { colors, spacing, typography } from '@/theme';
-import { FontAwesome, Ionicons } from '@expo/vector-icons';
-import Constants from 'expo-constants';
+import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { Link, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import {
-    Pressable,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    View
-} from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
-import MapViewDirections from 'react-native-maps-directions';
+import { useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
+import { StatusBar, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-interface NewBookingScreenProps {
-    navigation?: any;
-}
+// Mock data para testing (fuera del componente)
+const MOCK_LOCATIONS: LocationOption[] = [
+	{
+		address: 'Centro Comercial Sambil',
+		latitude: 10.7161971,
+		longitude: -71.6445307,
+		description: 'Maracaibo, Zulia',
+		placeId: 'mock-1',
+	},
+	{
+		address: 'Parque Ana Maria Campos',
+		latitude: 10.671897,
+		longitude: -71.6440949,
+		description: 'Maracaibo, Zulia',
+		placeId: 'mock-2',
+	},
+	{
+		address: 'Aeropuerto Internacional La Chinita',
+		latitude: 10.5566819,
+		longitude: -71.7254096,
+		description: 'Maracaibo, Venezuela',
+		placeId: 'mock-4',
+	},
+	{
+		address: 'Plaza de la Republica',
+		latitude: 10.665835,
+		longitude: -71.6086227,
+		description: 'Maracaibo, Zulia',
+		placeId: 'mock-5',
+	},
+];
 
-const NewBookingScreen: React.FC<NewBookingScreenProps> = ({ navigation }) => {
-    const [origin, setOrigin] = useState({
-        latitude: 10.647818,
-        longitude: -71.612268,
-    });
-    const [destination, setDestination] = useState({
-        latitude: 10.652139,
-        longitude: -71.611751,
-    });
-    const [originAddress, setOriginAddress] = useState('');
-    const [destinationAddress, setDestinationAddress] = useState('');
-    const toast = useToast();
-    const router = useRouter();
-    const googleMapsApiKey = Constants.expoConfig?.extra?.GOOGLE_MAPS_API_KEY;
+const NewBookingScreen: React.FC = () => {
+	const toast = useToast();
+	const router = useRouter();
+	const {
+		pickupLocation,
+		dropoffLocation,
+		setPickupLocation,
+		setDropoffLocation,
+		removePickupLocation,
+		removeDropoffLocation,
+	} = useBookingStore();
 
-    const checkLocationPermission = async () => {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-            console.log('Permission to access location was denied');
-            return;
-        }
+	// Estados para búsqueda manual
+	const [originQuery, setOriginQuery] = useState(pickupLocation?.address || '');
+	const [destinationQuery, setDestinationQuery] = useState(dropoffLocation?.address || '');
+	const [originResults, setOriginResults] = useState<LocationOption[]>([]);
+	const [destinationResults, setDestinationResults] = useState<LocationOption[]>([]);
+	const [originLoading, setOriginLoading] = useState(false);
+	const [destinationLoading, setDestinationLoading] = useState(false);
+	const [selectMapTextColor, setSelectMapTextColor] = useState(colors.text.secondary);
+	const [, setHasLocationPermission] = useState(false);
+	const [firstLoad, setFirstLoad] = useState(true);
 
-        const location = await Location.getCurrentPositionAsync({});
-        const { latitude, longitude } = location.coords;
-        setOrigin({ latitude, longitude });
-    };
+	// Estados derivados del store y loading
+	const originState = originLoading ? 'loading' : pickupLocation ? 'valid' : 'default';
+	const destinationState = destinationLoading ? 'loading' : dropoffLocation ? 'valid' : 'default';
 
-    useEffect(() => {
-        checkLocationPermission();
-    }, []);
+	// Sincronizar queries cuando cambie el store
+	useEffect(() => {
+		if (pickupLocation && originQuery !== pickupLocation.address) {
+			setOriginQuery(pickupLocation.address);
+		}
+	}, [originQuery, pickupLocation]);
 
-    const handleBack = () => {
-        router.back();
-    };
+	useEffect(() => {
+		if (dropoffLocation && destinationQuery !== dropoffLocation.address) {
+			setDestinationQuery(dropoffLocation.address);
+		}
+	}, [destinationQuery, dropoffLocation]);
 
-    const handleOriginMap = () => {
-        toast.info('Seleccionar ubicación', 'Abriendo mapa para origen...');
-        // Aquí irías a una pantalla de mapa
-    };
+	// Obtener ubicación actual del usuario
+	const getCurrentLocation = useCallback(async (): Promise<LocationOption | null> => {
+		try {
+			const { status } = await Location.requestForegroundPermissionsAsync();
+			const isGranted = status === 'granted';
+			setHasLocationPermission(isGranted);
 
-    const handleDestinationMap = () => {
-        toast.info('Seleccionar ubicación', 'Abriendo mapa para destino...');
-        // Aquí irías a una pantalla de mapa
-    };
+			if (!isGranted) {
+				toast.error('Permisos', 'Se necesita acceso a la ubicación');
+				return null;
+			}
 
-    const handleSelectVehicle = () => {
-        // Navegar a pantalla de selección de vehículo
-        console.log('Seleccionar tipo de vehículo');
-    };
+			const location = await Location.getCurrentPositionAsync({});
+			const { latitude, longitude } = location.coords;
 
-    const handleConfirmTrip = () => {
-        if (!originAddress.trim()) {
-            toast.error('Error', 'Por favor ingresa el origen');
-            return;
-        }
-        if (!destinationAddress.trim()) {
-            toast.error('Error', 'Por favor ingresa el destino');
-            return;
-        }
+			return {
+				latitude,
+				longitude,
+				address: 'Mi ubicación actual',
+				description: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+				placeId: 'current-location',
+			};
+		} catch (error) {
+			toast.error('Error', 'No se pudo obtener la ubicación');
+			return null;
+		}
+	}, [toast]);
 
-        toast.success('¡Viaje confirmado!', 'Buscando conductor...');
-        // Aquí enviarías la solicitud del viaje
-        console.log('Confirmar viaje:', { origin, destination });
-    };
+	// Solicitar permisos de ubicación al montar
+	useEffect(() => {
+		const initializeLocation = async () => {
+			const currentLocation = await getCurrentLocation();
+			if (currentLocation) {
+				setPickupLocation(currentLocation);
+			}
+		};
 
-    return (
-        <SafeAreaView style={styles.safeArea}>
-            <StatusBar barStyle="dark-content" backgroundColor={colors.card} />
+		initializeLocation();
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
 
-            <View style={styles.container}>
-                {/* Header */}
-                <View style={styles.header}>
-                    <Link href="/" asChild>
-                        <Pressable style={styles.backButton}>
-                            <Ionicons
-                                name="arrow-back"
-                                size={24}
-                                color={colors.text.secondary}
-                            />
-                        </Pressable>
-                    </Link>
-                    <Text variant="h3" weight="semiBold" style={styles.headerTitle}>
-                        Solicitar Viaje
-                    </Text>
-                    <View style={styles.headerSpacer} />
-                </View>
+	// Handler genérico para búsqueda de ubicaciones
+	const handleLocationSearch = useCallback(
+		(
+			text: string,
+			setQuery: (text: string) => void,
+			setResults: (results: LocationOption[]) => void,
+			setLoading: (loading: boolean) => void,
+			clearLocation: () => void,
+		) => {
+			setQuery(text);
+			clearLocation();
 
-                {/* Main Content */}
-                <ScrollView
-                    style={styles.content}
-                    contentContainerStyle={styles.contentContainer}
-                    showsVerticalScrollIndicator={false}
-                >
-                    {/* Location Inputs */}
-                    <View style={styles.locationsContainer}>
-                        <LocationInput
-                            placeholder="Origen"
-                            value={originAddress}
-                            onChangeText={setOriginAddress}
-                            iconName="location"
-                            onMapPress={handleOriginMap}
-                            containerStyle={styles.locationInput}
-                        />
+			if (text.length === 0) {
+				setResults([]);
+				return;
+			}
 
-                        <LocationInput
-                            placeholder="Destino"
-                            value={destinationAddress}
-                            onChangeText={setDestinationAddress}
-                            iconName="location-sharp"
-                            onMapPress={handleDestinationMap}
-                            containerStyle={styles.locationInput}
-                        />
-                        <View style={{
-                            flexDirection: 'row',
-                            gap: 8
-                        }}>
-                            <Text>
-                                <FontAwesome
-                                    name="map-pin"
-                                    size={20}
-                                    color={colors.blue.main}
-                                />
-                            </Text>
-                            <Text style={{ color: colors.blue.main }}>
-                                Direccion en el mapa
-                            </Text>
-                        </View>
-                    </View>
+			setLoading(true);
 
-                    {/* Map View */}
-                    <View style={styles.mapContainer}>
-                        <MapView
-                            style={styles.mapView}
-                            initialRegion={{
-                                latitude: origin.latitude,
-                                longitude: origin.longitude,
-                                latitudeDelta: 0.09,
-                                longitudeDelta: 0.04,
-                            }}
-                            provider={PROVIDER_GOOGLE}
-                            showsBuildings={false}
-                            showsPointsOfInterest={false}
-                            showsIndoors={false}
-                        >
-                            <Marker
-                                coordinate={origin}
-                                title="Origen"
-                                pinColor={colors.blue.main}
-                                draggable
-                                onDragEnd={(e) => {
-                                    setOrigin(e.nativeEvent.coordinate);
-                                }}
-                            />
-                            <Marker
-                                coordinate={destination}
-                                title="Destino"
-                                pinColor={colors.success}
-                                draggable
-                                onDragEnd={(e) => {
-                                    setDestination(e.nativeEvent.coordinate);
-                                }}
-                            />
-                            <MapViewDirections
-                                origin={origin}
-                                destination={destination}
-                                apikey={googleMapsApiKey}
-                                strokeColor={colors.blue.main}
-                                strokeWidth={2}
-                            />
-                        </MapView>
-                    </View>
+			// Simular búsqueda con delay
+			setTimeout(() => {
+				const filtered = MOCK_LOCATIONS.filter(
+					location =>
+						location.address.toLowerCase().includes(text.toLowerCase()) ||
+						location.description?.toLowerCase().includes(text.toLowerCase()),
+				);
+				setResults(filtered);
+				setLoading(false);
+			}, 500);
+		},
+		[],
+	);
 
-                    {/* Vehicle Selection Card */}
-                    {/* <TouchableOpacity
-                        style={styles.vehicleCard}
-                        onPress={handleSelectVehicle}
-                        activeOpacity={0.7}
-                    >
-                        <View style={styles.vehicleInfo}>
-                            <View style={styles.vehicleIconContainer}>
-                                <Ionicons name="car" size={32} color={colors.blue.main} />
-                            </View>
-                            <View style={styles.vehicleDetails}>
-                                <Text weight="semiBold" style={styles.vehicleType}>
-                                    Viaje Estándar
-                                </Text>
-                                <Text
-                                    variant="caption"
-                                    color={colors.text.secondary}
-                                    style={styles.vehicleSubtext}
-                                >
-                                    Opción más popular
-                                </Text>
-                            </View>
-                            <Ionicons
-                                name="chevron-forward"
-                                size={20}
-                                color={colors.text.secondary}
-                            />
-                        </View>
+	const handleOriginClear = useCallback(() => {
+		setOriginQuery('');
+		removePickupLocation();
+	}, [removePickupLocation]);
 
-                        <View style={styles.priceDivider} />
+	const handleDestinationClear = useCallback(() => {
+		setDestinationQuery('');
+		removeDropoffLocation();
+	}, [removeDropoffLocation]);
 
-                        <View style={styles.priceContainer}>
-                            <Text color={colors.text.secondary}>Precio estimado</Text>
-                            <Text variant="h2" weight="bold" style={styles.price}>
-                                $10.00 - $12.50
-                            </Text>
-                        </View>
-                    </TouchableOpacity> */}
+	const handleOriginChange = useCallback(
+		(text: string) => {
+			handleLocationSearch(text, setOriginQuery, setOriginResults, setOriginLoading, removePickupLocation);
+		},
+		[handleLocationSearch, removePickupLocation],
+	);
 
-                    {/* Additional Info */}
-                    {/* <View style={styles.infoContainer}>
-                        <View style={styles.infoRow}>
-                            <Ionicons
-                                name="time-outline"
-                                size={20}
-                                color={colors.text.secondary}
-                            />
-                            <Text variant="caption" color={colors.text.secondary} style={styles.infoText}>
-                                Tiempo estimado: 15-20 min
-                            </Text>
-                        </View>
-                        <View style={styles.infoRow}>
-                            <Ionicons
-                                name="shield-checkmark-outline"
-                                size={20}
-                                color={colors.text.secondary}
-                            />
-                            <Text variant="caption" color={colors.text.secondary} style={styles.infoText}>
-                                Viaje seguro y verificado
-                            </Text>
-                        </View>
-                    </View> */}
-                </ScrollView>
+	const handleOriginMap = useCallback(() => {
+		router.push('/location/selectLocation?type=origin');
+	}, [router]);
 
-                {/* Footer */}
-                <View style={styles.footer}>
-                    <Button
-                        title="Siguiente"
-                        variant="primary"
-                        onPress={handleConfirmTrip}
-                        style={styles.confirmButton}
-                    />
-                </View>
-            </View>
-        </SafeAreaView>
-    );
+	const handleConfirmTrip = useCallback(() => {
+		if (!pickupLocation) {
+			toast.error('Error', 'Por favor selecciona el origen');
+			return;
+		}
+		if (!dropoffLocation) {
+			toast.error('Error', 'Por favor selecciona el destino');
+			return;
+		}
+
+		// Calcular distancia
+		const distance = calculateDistance(
+			pickupLocation.latitude,
+			pickupLocation.longitude,
+			dropoffLocation.latitude,
+			dropoffLocation.longitude,
+		);
+
+		toast.success('¡Viaje confirmado!', `Distancia: ${distance.toFixed(2)} km`);
+
+		// Navegar a la siguiente pantalla
+		// router.push('/vehicle-selection');
+	}, [pickupLocation, dropoffLocation, toast]);
+
+	const onOriginFocused = useCallback(() => {
+		setSelectMapTextColor(colors.primary.main);
+	}, []);
+
+	const onDestinationFocused = useCallback(() => {
+		setSelectMapTextColor(colors.tertiary.main);
+	}, []);
+
+	const handleDestinationChange = useCallback(
+		(text: string) => {
+			handleLocationSearch(
+				text,
+				setDestinationQuery,
+				setDestinationResults,
+				setDestinationLoading,
+				removeDropoffLocation,
+			);
+		},
+		[handleLocationSearch, removeDropoffLocation],
+	);
+
+	const handleOriginSelected = useCallback(
+		(option: LocationOption) => {
+			setOriginResults([]);
+			setPickupLocation(option);
+		},
+		[setPickupLocation],
+	);
+
+	const handleDestinationSelected = useCallback(
+		(option: LocationOption) => {
+			setDestinationResults([]);
+			setDropoffLocation(option);
+		},
+		[setDropoffLocation],
+	);
+
+	const handleDestinationMap = useCallback(() => {
+		router.push('/location/selectLocation?type=destination');
+	}, [router]);
+
+	return (
+		<SafeAreaView style={styles.safeArea}>
+			<StatusBar barStyle="dark-content" backgroundColor={colors.card} />
+
+			<View style={styles.container}>
+				{/* Location Inputs */}
+				<View style={styles.locationsContainer}>
+					<LocationInput
+						placeholder="¿Dónde estás?"
+						value={originQuery}
+						onChangeText={handleOriginChange}
+						iconName="location"
+						mapIconColor={colors.primary.main}
+						onMapPress={handleOriginMap}
+						onClearPress={handleOriginClear}
+						options={originResults}
+						onOptionSelected={handleOriginSelected}
+						state={originState}
+						containerStyle={styles.locationInput}
+						onFocus={onOriginFocused}
+						hasValidLocation={!!pickupLocation}
+					/>
+
+					{/* Google Places Autocomplete - Para comparar */}
+					{/* <GooglePlacesInput
+						placeholder="¿Dónde estás? (Google Places)"
+						iconName="location"
+						mapIconName="map"
+						mapIconColor={colors.primary.main}
+						onLocationSelected={(location) => {
+							setPickupLocation(location);
+							toast.success('Origen seleccionado', location.address);
+						}}
+						onMapPress={handleOriginMap}
+						onClearPress={handleOriginClear}
+						containerStyle={styles.googlePlacesInput}
+						locationBias={{
+							latitude: 10.647818, // Maracaibo
+							longitude: -71.612268,
+							radius: 30000, // 30km alrededor de Maracaibo
+						}}
+					/> */}
+
+					<LocationInput
+						placeholder="¿A dónde vas?"
+						value={destinationQuery}
+						onChangeText={handleDestinationChange}
+						iconName="location-sharp"
+						mapIconColor={colors.tertiary.main}
+						onMapPress={handleDestinationMap}
+						onClearPress={handleDestinationClear}
+						options={destinationResults}
+						onOptionSelected={handleDestinationSelected}
+						state={destinationState}
+						containerStyle={styles.locationInput}
+						onFocus={onDestinationFocused}
+						focusedLeftIconColor={colors.tertiary.main}
+						focusedBorderColor={colors.tertiary.main}
+						hasValidLocation={!!dropoffLocation}
+					/>
+
+					<TouchableOpacity
+						style={styles.mapHintContainer}
+						onPress={() => toast.info('Mapa', 'Arrastra los marcadores para ajustar')}
+					>
+						<Ionicons name="map" size={20} color={selectMapTextColor} />
+						<Text style={[styles.mapHintText, { color: selectMapTextColor }]}>Seleccionar la ubicación en el mapa</Text>
+					</TouchableOpacity>
+				</View>
+
+				{/* Map View */}
+				<View style={styles.mapContainer}>
+					<MapRoute
+						origin={
+							pickupLocation
+								? {
+										latitude: pickupLocation.latitude,
+										longitude: pickupLocation.longitude,
+										title: 'Origen',
+										description: pickupLocation.address,
+								  }
+								: undefined
+						}
+						destination={
+							dropoffLocation
+								? {
+										latitude: dropoffLocation.latitude,
+										longitude: dropoffLocation.longitude,
+										title: 'Destino',
+										description: dropoffLocation.address,
+								  }
+								: undefined
+						}
+						initialRegion={{
+							latitude: pickupLocation?.latitude ?? 10.647818,
+							longitude: pickupLocation?.longitude ?? -71.612268,
+							latitudeDelta: 0.09,
+							longitudeDelta: 0.04,
+						}}
+						onOriginDragEnd={coordinate => {
+							if (pickupLocation) {
+								setPickupLocation({
+									...pickupLocation,
+									latitude: coordinate.latitude,
+									longitude: coordinate.longitude,
+								});
+							}
+						}}
+						onDestinationDragEnd={coordinate => {
+							if (dropoffLocation) {
+								setDropoffLocation({
+									...dropoffLocation,
+									latitude: coordinate.latitude,
+									longitude: coordinate.longitude,
+								});
+							}
+						}}
+						showDirections={!!(pickupLocation && dropoffLocation)}
+						containerStyleType="fill"
+					/>
+
+					{/* Trip Info */}
+					{pickupLocation && dropoffLocation && <TripInfoCard origin={pickupLocation} destination={dropoffLocation} />}
+				</View>
+
+				{/* Footer */}
+				<View style={styles.footer}>
+					<Button
+						title="Continuar"
+						variant="primary"
+						onPress={handleConfirmTrip}
+						style={styles.confirmButton}
+						disabled={!pickupLocation || !dropoffLocation}
+					/>
+				</View>
+			</View>
+		</SafeAreaView>
+	);
+};
+
+// Función para calcular distancia usando fórmula de Haversine
+const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+	const R = 6371; // Radio de la Tierra en km
+	const dLat = toRad(lat2 - lat1);
+	const dLon = toRad(lon2 - lon1);
+	const a =
+		Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+		Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+	const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+	return R * c;
+};
+
+const toRad = (value: number): number => {
+	return (value * Math.PI) / 180;
 };
 
 const styles = StyleSheet.create({
-    safeArea: {
-        flex: 1,
-        backgroundColor: colors.card,
-    },
-    container: {
-        flex: 1,
-        backgroundColor: colors.background.default,
-    },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: spacing.md,
-        paddingVertical: spacing.md,
-        backgroundColor: colors.card,
-        borderBottomWidth: 1,
-        borderBottomColor: colors.border,
-    },
-    backButton: {
-        padding: spacing.sm,
-    },
-    headerTitle: {
-        flex: 1,
-        textAlign: 'center',
-        marginLeft: -40,
-    },
-    headerSpacer: {
-        width: 40,
-    },
-    mapContainer: {
-        height: 300,
-        width: '100%',
-        marginBottom: spacing.lg,
-        backgroundColor: 'red',
-    },
-    mapView: {
-        width: '100%',
-        height: '100%',
-    },
-    content: {
-        flex: 1,
-    },
-    contentContainer: {
-        padding: spacing.lg,
-    },
-    locationsContainer: {
-        marginBottom: spacing.lg,
-    },
-    locationInput: {
-        marginBottom: spacing.md,
-    },
-    vehicleCard: {
-        backgroundColor: colors.blue.light,
-        borderRadius: 12,
-        padding: spacing.md,
-        marginBottom: spacing.lg,
-    },
-    vehicleInfo: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    vehicleIconContainer: {
-        width: 48,
-        height: 48,
-        backgroundColor: colors.card,
-        borderRadius: 8,
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: {
-            width: 0,
-            height: 1,
-        },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-        elevation: 2,
-    },
-    vehicleDetails: {
-        flex: 1,
-        marginLeft: spacing.md,
-    },
-    vehicleType: {
-        fontSize: typography.fontSize.base,
-        marginBottom: 2,
-    },
-    vehicleSubtext: {
-        fontSize: typography.fontSize.sm,
-    },
-    priceDivider: {
-        height: 1,
-        backgroundColor: '#bfdbfe',
-        marginVertical: spacing.md,
-    },
-    priceContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    price: {
-        fontSize: typography.fontSize['2xl'],
-    },
-    infoContainer: {
-        gap: spacing.md,
-    },
-    infoRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: spacing.sm,
-    },
-    infoText: {
-        flex: 1,
-    },
-    footer: {
-        padding: spacing.md,
-        backgroundColor: colors.card,
-        borderTopWidth: 1,
-        borderTopColor: colors.border,
-    },
-    confirmButton: {
-        height: 56,
-        shadowColor: colors.blue.main,
-        shadowOffset: {
-            width: 0,
-            height: 4,
-        },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 8,
-    },
+	safeArea: {
+		flex: 1,
+		backgroundColor: colors.card,
+	},
+	container: {
+		flex: 1,
+		backgroundColor: colors.background.default,
+	},
+	header: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'space-between',
+		paddingHorizontal: spacing.md,
+		paddingVertical: spacing.md,
+		backgroundColor: colors.card,
+		borderBottomWidth: 1,
+		borderBottomColor: colors.border,
+	},
+	backButton: {
+		padding: spacing.sm,
+	},
+	headerTitle: {
+		flex: 1,
+		textAlign: 'center',
+		marginLeft: -40,
+	},
+	headerSpacer: {
+		width: 40,
+	},
+	locationsContainer: {
+		paddingHorizontal: spacing.lg,
+		paddingTop: spacing.lg,
+		paddingBottom: spacing.md,
+		backgroundColor: colors.background.default,
+	},
+	locationInput: {
+		marginBottom: spacing.md,
+		zIndex: 1,
+		elevation: 1,
+	},
+	googlePlacesInput: {
+		marginBottom: spacing.md,
+		zIndex: 100,
+		elevation: 100,
+	},
+	mapHintContainer: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: spacing.sm,
+		paddingVertical: spacing.xs,
+	},
+	mapHintText: {
+		color: colors.blue.main,
+		fontSize: typography.fontSize.sm,
+	},
+	mapContainer: {
+		flex: 1,
+		width: '100%',
+		position: 'relative',
+	},
+	footer: {
+		padding: spacing.md,
+		backgroundColor: colors.card,
+		borderTopWidth: 1,
+		borderTopColor: colors.border,
+	},
+	confirmButton: {
+		height: 56,
+		shadowColor: colors.blue.main,
+		shadowOffset: {
+			width: 0,
+			height: 4,
+		},
+		shadowOpacity: 0.3,
+		shadowRadius: 8,
+		elevation: 8,
+	},
 });
 
 export default NewBookingScreen;
